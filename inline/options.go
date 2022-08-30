@@ -28,9 +28,11 @@ func ParseMangaPicker(description string) (MangaPicker, error) {
 	var (
 		first = "first"
 		last  = "last"
+		id    = "id"
 	)
 
-	pattern := fmt.Sprintf(`^(%s|%s|\d+)$`, first, last)
+  pattern := fmt.Sprintf(`^(%s|%s|\d+|(id:(?P<%s>.*)))$`, first, last, id)
+  fmt.Printf("pattern: %s\ndescription: %s\n", pattern, description)
 	mangaPickerRegex := regexp.MustCompile(pattern)
 
 	if !mangaPickerRegex.MatchString(description) {
@@ -50,8 +52,22 @@ func ParseMangaPicker(description string) (MangaPicker, error) {
 		case last:
 			return mangas[len(mangas)-1]
 		default:
-			index := lo.Must(strconv.ParseUint(description, 10, 16))
-			return mangas[index]
+			groups := util.ReGroups(mangaPickerRegex, description)
+			if idextracted, ok := groups[id]; ok && id != "" {
+        manga, ok := lo.Find(mangas, func (a *source.Manga) bool {
+                return a.ID == idextracted
+            })
+        if ok {
+            return manga
+        } else {
+          _, _ = fmt.Fprint(os.Stderr, "No mangas found.\n")
+          os.Exit(1)
+          return nil
+        }
+        } else {
+          index := lo.Must(strconv.ParseUint(description, 10, 16))
+          return mangas[index]
+        }
 		}
 	}, nil
 }
@@ -67,9 +83,9 @@ func ParseChaptersFilter(description string) (ChapterFilter, error) {
 	)
 
 	pattern := fmt.Sprintf(`^(%s|%s|%s|(?P<%s>\d+)(-(?P<%s>\d+))?|@(?P<%s>.+)@)$`, first, last, all, from, to, sub)
-	mangaPickerRegex := regexp.MustCompile(pattern)
+	chapterPickerRegex := regexp.MustCompile(pattern)
 
-	if !mangaPickerRegex.MatchString(description) {
+	if !chapterPickerRegex.MatchString(description) {
 		return nil, fmt.Errorf("invalid chapter filter pattern: %s", description)
 	}
 
@@ -88,7 +104,7 @@ func ParseChaptersFilter(description string) (ChapterFilter, error) {
 		case all:
 			return chapters
 		default:
-			groups := util.ReGroups(mangaPickerRegex, description)
+			groups := util.ReGroups(chapterPickerRegex, description)
 
 			if sub, ok := groups[sub]; ok && sub != "" {
 				return lo.Filter(chapters, func(a *source.Chapter, _ int) bool {
